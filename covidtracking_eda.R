@@ -17,7 +17,7 @@
 rm(list = ls())
 library(LalRUtils)
 libreq(data.table, tidyverse, anytime, patchwork, plotly, zoo)
-theme_set(lal_plot_theme())
+theme_set(lal_plot_theme_d())
 
 options(repr.plot.width = 15, repr.plot.height = 12)
 
@@ -63,6 +63,7 @@ t10states[, paste0("rm3_", smoothvars) := lapply(.SD, rollmean, k = 3, fill = NA
 plot_ts = function(df, col, t = "Time Series of", logtransform = F){
     p = ggplot(df, aes(x = d, y = {{col}}, colour = state, group = state)) +
         geom_point() + geom_line() + 
+        scale_colour_brewer(palette = "Spectral") +
         labs(
             title = t,
             subtitle = paste(unique(df$state), collapse = ", ")
@@ -96,7 +97,7 @@ embed_notebook(ggplotly(p))
 embed_notebook(ggplotly(p))
 
 # %%
-(p = plot_ts(t10states, rm3_totalTestResultsIncrease, "New Tests Time Series", T))
+(p = plot_ts(t10states[d >= '2020-03-15'], rm3_totalTestResultsIncrease, "New Tests Time Series", T))
 
 # %%
 embed_notebook(ggplotly(p))
@@ -117,9 +118,6 @@ p1 / p2
 
 # %%
 embed_notebook(ggplotly(p1))
-
-# %%
-t10states[state == "CA", .(state, d, positive, totalTestResults, tpr, rm3_tpr)]
 
 # %% [markdown]
 # ## New TPR
