@@ -36,6 +36,7 @@ state_tests %>% glimpse()
 
 # %%
 state_tests[, tpr := positive / totalTestResults]
+state_tests[, cfr := death / positive ]
 state_tests[, tpr_new := positiveIncrease / totalTestResultsIncrease]
 (most_affected = 
      state_tests[d == max(state_tests$d)][
@@ -48,7 +49,7 @@ t10states = state_tests[positive >= 10 & state %in% most_affected$state]
 # %%
 setorder(t10states, state, date)
 
-smoothvars = c("positive", "hospitalized", "death", "totalTestResults", 
+smoothvars = c("positive", "hospitalizedCurrently", "cfr", "death", "totalTestResults", 
               "positiveIncrease", "hospitalizedIncrease", "deathIncrease", "totalTestResultsIncrease",
               'tpr', 'tpr_new')
 
@@ -60,11 +61,32 @@ t10states[, paste0("rm3_", smoothvars) := lapply(.SD, rollmean, k = 3, fill = NA
 # %% [markdown] toc-hr-collapsed=true toc-nb-collapsed=true
 # # Plots 
 
+# %% [markdown]
+# ## Natl Time Series
+
+# %%
+nat_ts = state_tests[, lapply(.SD, sum, na.rm = T), by = d, .SDcols = c("positive", "totalTestResults", "death")][, 
+    `:=`(cfr = death/positive,
+         tpr = positive/totalTestResults
+         )]
+nat_ts %>% head
+
+# %%
+p1 = nat_ts[d >= "2020-03-15"] %>% 
+    ggplot(aes(x = d, y = tpr)) +
+    geom_point() + ggtitle("TPR over time")
+p2 = nat_ts[d >= "2020-03-15"] %>% 
+    ggplot(aes(x = d, y = cfr)) +
+    geom_point() + ggtitle("CFR Estimate over time")
+p1 | p2
+
 # %%
 # generic function to plot time series
 plot_ts = function(df, col, t = "Time Series of", logtransform = F){
     p = ggplot(df, aes(x = d, colour = state, group = state)) +
-        geom_point(aes_string(y = col), size = 0.7) + geom_line(aes_string(y = paste0("rm3_", col))) +
+        geom_point(aes_string(y = col), size = 0.7) + 
+        # plot rolling mean line 
+        geom_line(aes_string(y = paste0("rm3_", col))) +
         scale_colour_brewer(palette = "Spectral") +
         labs(
             title = t,
@@ -78,31 +100,82 @@ plot_ts = function(df, col, t = "Time Series of", logtransform = F){
 # ## Cases 
 
 # %%
-(p = plot_ts(t10states, 'positive', "Cumulative Cases Time Series", T))
+p1 = plot_ts(t10states, 'positive', "Cumulative Cases Time Series", T)
+p2 = plot_ts(t10states, 'positiveIncrease', "New Cases Time Series", T)
+(p1 | p2)
 
 # %%
-embed_notebook(ggplotly(p))
+p1 = plot_ts(t10states, 'death', "Cumulative Deaths Time Series", T)
+p2 = plot_ts(t10states, 'deathIncrease', "New Deaths Time Series", T)
+(p1 | p2)
 
 # %%
-(p = plot_ts(t10states, 'positiveIncrease', "New Cases Time Series", T))
+p1 = plot_ts(t10states, 'hospitalizedCurrently', "Cumulative Hospitalisations Time Series", T)
+p1
 
 # %%
-embed_notebook(ggplotly(p))
+(cfp = plot_ts(t10states[d >= "2020-03-15"], "cfr", "Case Fatality Rate"))
 
 # %% [markdown]
 # ## Tests 
 
 # %%
-(p = plot_ts(t10states, 'totalTestResults', "Cumulative Tests Time Series", T))
+p = plot_ts(t10states, 'totalTestResults', "Cumulative Tests Time Series", T)
+p2 = plot_ts(t10states[d >= '2020-03-15'], 'totalTestResultsIncrease', "New Tests Time Series", T)
+
+(p | p2)
 
 # %%
 embed_notebook(ggplotly(p))
 
+# %% [markdown]
+# # Shares over time  
+
 # %%
-(p = plot_ts(t10states[d >= '2020-03-15'], 'totalTestResultsIncrease', "New Tests Time Series", T))
+t10states[, rm3_deathIncrease := ifelse(rm3_deathIncrease < 0, 0, deathIncrease)]
+t10states[, rm3_totalTestResultsIncrease := ifelse(rm3_totalTestResultsIncrease < 0, 0, rm3_totalTestResultsIncrease)]
+
+t10states[, denom_cases := sum(rm3_positiveIncrease), by = d][, 
+            denom_deaths := sum(rm3_deathIncrease), by = d]
+t10states[, newcase_share := rm3_positiveIncrease / denom_cases][, 
+            newdeath_share := rm3_deathIncrease/denom_deaths]
+
+t10states[, rm3_totalTestResultsIncrease := ifelse(rm3_totalTestResultsIncrease < 0, 0, rm3_totalTestResultsIncrease)]
+t10states[, denom_tests := sum(rm3_totalTestResultsIncrease), by = d]
+t10states[, tests_share := rm3_totalTestResultsIncrease / denom_tests]
+
+# %%
+t10states[, stgroup := case_when(
+    state %in% c("NY", "NJ", "MA", "CT", "PA") ~ paste0("1_", state), # group northeast
+    TRUE ~ paste0("2_", state)
+)]
+
+# %%
+p1 = ggplot(t10states[d >= "2020-03-15"], aes(x = d, y = newcase_share, fill = stgroup)) +
+    geom_area(position="fill") +
+    scale_y_continuous(breaks = seq(0, 1, .1))+
+    scale_fill_brewer(palette = "Spectral") +
+    ggtitle("New Cases")
+p2 = ggplot(t10states[d >= "2020-03-24"], aes(x = d, y = newdeath_share, fill = stgroup)) +
+    geom_area(position="fill") +
+    scale_y_continuous(breaks = seq(0, 1, .1))+
+    theme(legend.position = "None") + 
+    scale_fill_brewer(palette = "Spectral") +
+    ggtitle("New Deaths")
+p3 = ggplot(t10states[d >= "2020-03-15"], aes(x = d, y = tests_share, fill = stgroup)) +
+    geom_area(position="fill") +
+    theme(legend.position = "None") + 
+    scale_y_continuous(breaks = seq(0, 1, .1))+
+    scale_fill_brewer(palette = "Spectral") +
+    ggtitle("New Tests")
+options(repr.plot.width = 20, repr.plot.height = 12)
+(p3 | p1 | p2 ) + plot_annotation(title = "Shares of Tests, Cases, and Deaths over time")
 
 # %% [markdown] toc-hr-collapsed=true toc-nb-collapsed=true
 # ## TPR
+
+# %%
+options(repr.plot.width = 15, repr.plot.height = 12)
 
 # %%
 p1 = plot_ts(t10states, 'tpr', "Test Positive Rate: Time Series", T) +
