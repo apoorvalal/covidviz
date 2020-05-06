@@ -26,8 +26,11 @@ options(repr.plot.width = 15, repr.plot.height = 12)
 # https://covidtracking.com/api
 
 # %%
-ctracking_url = "http://covidtracking.com/api/states/daily.csv"
-state_tests = fread(ctracking_url)
+system("rm -f daily.csv")
+system("wget https://covidtracking.com/api/v1/states/daily.csv")
+
+# %%
+state_tests = fread('daily.csv')
 state_tests[, d := anydate(date)]
 state_tests[, day := weekdays(d)]
 dropcols = c('hash', 'dateChecked')
@@ -41,7 +44,8 @@ state_tests[, tpr_new := positiveIncrease / totalTestResultsIncrease]
 (most_affected = 
      state_tests[d == max(state_tests$d)][
     order(-positive)][
-    1:10])
+    1:10, c("state", "d", "positive", "death", "positiveIncrease", "deathIncrease")]
+ )
 
 # %%
 t10states = state_tests[positive >= 10 & state %in% most_affected$state]
@@ -65,33 +69,75 @@ t10states[, paste0("rm3_", smoothvars) := lapply(.SD, rollmean, k = 3, fill = NA
 # ## Natl Time Series
 
 # %%
-nat_ts = state_tests[, lapply(.SD, sum, na.rm = T), by = d, .SDcols = c("positive", "totalTestResults", "death")][, 
+nat_ts = state_tests[, lapply(.SD, sum, na.rm = T), by = d, 
+                     .SDcols = c("positive", "positiveIncrease", "totalTestResults", "totalTestResultsIncrease", "death", "deathIncrease")][, 
     `:=`(cfr = death/positive,
-         tpr = positive/totalTestResults
+         tpr = positive/totalTestResults,
+         tpr_n = positiveIncrease/totalTestResultsIncrease
          )]
-nat_ts %>% head
+
+smoothvars = c("positive", "positiveIncrease", "death", "deathIncrease", "tpr_n", "cfr", "tpr", "totalTestResultsIncrease")
+
+nat_ts[, paste0("rm3_", smoothvars) := lapply(.SD, rollmean, k = 3, fill = NA, na.pad = T), .SDcols = smoothvars]
+nat_ts[, .(positive, positiveIncrease, death, deathIncrease, totalTestResults, totalTestResultsIncrease)] %>% head
+
+# %%
+p1 = nat_ts[d >= "2020-03-15"] %>% 
+    ggplot(aes(x = d, y = positive)) + scale_y_log10() +
+    geom_point() + geom_line(aes(y = rm3_positive)) + ggtitle("Agg case count")
+
+p2 = nat_ts[d >= "2020-03-15"] %>% 
+    ggplot(aes(x = d, y = positiveIncrease)) + geom_smooth(se = F) + 
+    geom_point() + ggtitle("New Cases")
+
+p3 = nat_ts[d >= "2020-03-15"] %>% 
+    ggplot(aes(x = d, y = death)) + scale_y_log10() + geom_line(aes(y = rm3_death)) +
+    geom_point() + ggtitle("Agg death count")
+
+p4 = nat_ts[d >= "2020-03-15"] %>% 
+    ggplot(aes(x = d, y = deathIncrease)) + scale_y_log10() + geom_smooth(se = F) +
+    geom_point() + ggtitle("New Deaths")
+
+(p1 | p2)/(p3 | p4)
 
 # %%
 p1 = nat_ts[d >= "2020-03-15"] %>% 
     ggplot(aes(x = d, y = tpr)) +
-    geom_point() + ggtitle("TPR over time")
+    geom_point() + geom_smooth(se = F) + ggtitle("TPR over time")
+
 p2 = nat_ts[d >= "2020-03-15"] %>% 
-    ggplot(aes(x = d, y = cfr)) +
+    ggplot(aes(x = d, y = tpr_n)) + geom_smooth(se = F) +
+    geom_point() + ggtitle("New Tests TPR over time")
+p3 = nat_ts[d >= "2020-03-15"] %>% 
+    ggplot(aes(x = d, y = totalTestResults)) + scale_y_log10() +
+    geom_point() + ggtitle("Total Tests over time")
+
+p4 = nat_ts[d >= "2020-03-15"] %>% 
+    ggplot(aes(x = d, y = totalTestResultsIncrease)) + 
+    scale_y_log10() + geom_smooth(se = F) +
+    geom_point() + ggtitle("New Tests over time")
+
+p5 = nat_ts[d >= "2020-03-15"] %>% 
+    ggplot(aes(x = d, y = cfr)) + geom_smooth(se = F) +
     geom_point() + ggtitle("CFR Estimate over time")
-p1 | p2
+(p2)/(p3 | p4) | p5
 
 # %%
 # generic function to plot time series
-plot_ts = function(df, col, t = "Time Series of", logtransform = F){
-    p = ggplot(df, aes(x = d, colour = state, group = state)) +
-        geom_point(aes_string(y = col), size = 0.7) + 
-        # plot rolling mean line 
-        geom_line(aes_string(y = paste0("rm3_", col))) +
+plot_ts = function(df, col, t = "Time Series of", logtransform = F, rm = T){
+    p = ggplot(df, aes_string(x = 'd', y = col, colour = 'state', group = 'state')) +
+        geom_point( size = 0.7) + 
+        # plot rolling mean line
         scale_colour_brewer(palette = "Spectral") +
         labs(
             title = t,
             subtitle = paste(unique(df$state), collapse = ", ")
         )
+    if (rm == T) {
+        p = p + geom_line(aes_string(y = paste0("rm3_", col))) 
+    } else{
+        p = p + geom_smooth(se = F)
+    }
     if (logtransform == T) p = p + scale_y_log10()
     return(p)
 }
@@ -101,32 +147,31 @@ plot_ts = function(df, col, t = "Time Series of", logtransform = F){
 
 # %%
 p1 = plot_ts(t10states, 'positive', "Cumulative Cases Time Series", T)
-p2 = plot_ts(t10states, 'positiveIncrease', "New Cases Time Series", T)
+p2 = plot_ts(t10states, 'positiveIncrease', "New Cases Time Series", T, F)
 (p1 | p2)
 
 # %%
-p1 = plot_ts(t10states, 'death', "Cumulative Deaths Time Series", T)
-p2 = plot_ts(t10states, 'deathIncrease', "New Deaths Time Series", T)
+p2 + facet_wrap(~ state) + lal_plot_theme()
+
+# %%
+p1 = plot_ts(t10states, 'death', "Cumulative Deaths Time Series", T, F)
+p2 = plot_ts(t10states, 'deathIncrease', "New Deaths Time Series", T, F)
 (p1 | p2)
 
 # %%
-p1 = plot_ts(t10states, 'hospitalizedCurrently', "Cumulative Hospitalisations Time Series", T)
-p1
+p2 + facet_wrap(~ state) + lal_plot_theme()
 
 # %%
-(cfp = plot_ts(t10states[d >= "2020-03-15"], "cfr", "Case Fatality Rate"))
+(cfp = plot_ts(t10states[d >= "2020-03-15"], "cfr", "Case Fatality Rate", F, F))
 
 # %% [markdown]
 # ## Tests 
 
 # %%
-p = plot_ts(t10states, 'totalTestResults', "Cumulative Tests Time Series", T)
-p2 = plot_ts(t10states[d >= '2020-03-15'], 'totalTestResultsIncrease', "New Tests Time Series", T)
+p = plot_ts(t10states, 'totalTestResults', "Cumulative Tests Time Series", T, F)
+p2 = plot_ts(t10states[d >= '2020-03-15'], 'totalTestResultsIncrease', "New Tests Time Series", T, F)
 
 (p | p2)
-
-# %%
-embed_notebook(ggplotly(p))
 
 # %% [markdown]
 # # Shares over time  
@@ -151,22 +196,25 @@ t10states[, stgroup := case_when(
 )]
 
 # %%
-p1 = ggplot(t10states[d >= "2020-03-15"], aes(x = d, y = newcase_share, fill = stgroup)) +
+p1 = ggplot(t10states[d >= "2020-03-15"], aes(x = d, y = newcase_share, fill = stgroup, colour = stgroup)) +
     geom_area(position="fill") +
     scale_y_continuous(breaks = seq(0, 1, .1))+
     scale_fill_brewer(palette = "Spectral") +
+    scale_colour_brewer(palette = "Spectral") +
     ggtitle("New Cases")
-p2 = ggplot(t10states[d >= "2020-03-24"], aes(x = d, y = newdeath_share, fill = stgroup)) +
+p2 = ggplot(t10states[d >= "2020-03-24"], aes(x = d, y = newdeath_share, fill = stgroup, colour = stgroup)) +
     geom_area(position="fill") +
     scale_y_continuous(breaks = seq(0, 1, .1))+
     theme(legend.position = "None") + 
     scale_fill_brewer(palette = "Spectral") +
+    scale_colour_brewer(palette = "Spectral") +
     ggtitle("New Deaths")
-p3 = ggplot(t10states[d >= "2020-03-15"], aes(x = d, y = tests_share, fill = stgroup)) +
+p3 = ggplot(t10states[d >= "2020-03-15"], aes(x = d, y = tests_share, fill = stgroup, colour = stgroup)) +
     geom_area(position="fill") +
     theme(legend.position = "None") + 
     scale_y_continuous(breaks = seq(0, 1, .1))+
     scale_fill_brewer(palette = "Spectral") +
+    scale_colour_brewer(palette = "Spectral") +
     ggtitle("New Tests")
 options(repr.plot.width = 20, repr.plot.height = 12)
 (p3 | p1 | p2 ) + plot_annotation(title = "Shares of Tests, Cases, and Deaths over time")
@@ -175,32 +223,23 @@ options(repr.plot.width = 20, repr.plot.height = 12)
 # ## TPR
 
 # %%
-options(repr.plot.width = 15, repr.plot.height = 12)
+options(repr.plot.width = 15, repr.plot.height = 10)
 
 # %%
-p1 = plot_ts(t10states, 'tpr', "Test Positive Rate: Time Series", T) +
+p1 = plot_ts(t10states, 'tpr', "Test Positive Rate: Time Series", T, F) +
     scale_y_continuous(breaks = seq(0, 1, .1))
 # p2 = plot_ts(t10states, rm3_tpr, "Test Positive Rate (Rolling Mean): Time Series", T) +
 #     scale_y_continuous(breaks = seq(0, 1, .1))
 p1 
 
 # %% [markdown]
-# ### TPR Over time (interactive)
-
-# %%
-embed_notebook(ggplotly(p1))
-
-# %% [markdown]
 # ## New TPR
 
 # %%
-p1 = plot_ts(t10states, 'tpr_new', "Test Positive Rate: Time Series", T) +
+p1 = plot_ts(t10states, 'tpr_new', "Test Positive Rate: Time Series", T, F) +
     scale_y_continuous(breaks = seq(0, 1, .1))
 
 p1 
-
-# %%
-embed_notebook(ggplotly(p2))
 
 # %% [markdown]
 # # Day-of-week effects 
@@ -210,12 +249,11 @@ dt = t10states[d >= '2020-03-15']
 dt[, wknd := ifelse(day %in% c("Saturday", "Sunday"), 1, 0)]
 dt[, t := date - 20200315] # time trend 
 dt$day2 = as.factor(dt$day) 
-dt %>% head()
 
 # %%
-(p = ggplot(dt, aes(d)) +
-    geom_point(aes(y = totalTestResultsIncrease, colour = as.factor(wknd))) + 
-    geom_line(aes(y = rm3_totalTestResultsIncrease)) +
+(p = ggplot(dt, aes(d, y = totalTestResultsIncrease)) +
+    geom_point(aes(colour = as.factor(wknd))) + 
+    geom_smooth(se = F) +
     labs(title = "Day of the week effects in Test Results") +
     facet_wrap(~ state, 2) +
     lal_plot_theme() +
@@ -245,7 +283,7 @@ day_of_week_plot = function(df){
 test_increase_regs = dt %>% group_by(state) %>% group_map( ~ lm(log(totalTestResultsIncrease+1) ~ relevel(day2, 2), .x) %>% tidy %>% mutate(state = .y[[1]]), keep = T) 
 dow_plots = map(test_increase_regs , day_of_week_plot) %>% wrap_plots(nrow = 2)
 dow_plots +  plot_annotation(
-    title = 'Day of the week effects in Test Results',
+    title = 'Day of the week effects in Test Volume',
     subtitle = 'Reference category: Monday',
 )
 
