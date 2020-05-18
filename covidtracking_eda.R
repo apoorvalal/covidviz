@@ -16,7 +16,7 @@
 # %%
 rm(list = ls())
 library(LalRUtils)
-libreq(data.table, tidyverse, anytime, patchwork, plotly, broom, zoo)
+libreq(data.table, tidyverse, anytime, patchwork, plotly, broom, zoo, hrbrthemes)
 theme_set(lal_plot_theme_d())
 
 options(repr.plot.width = 15, repr.plot.height = 12)
@@ -44,7 +44,7 @@ state_tests[, tpr_new := positiveIncrease / totalTestResultsIncrease]
 (most_affected = 
      state_tests[d == max(state_tests$d)][
     order(-positive)][
-    1:10, c("state", "d", "positive", "death", "positiveIncrease", "deathIncrease")]
+    1:10, c("state", "d", "positive", "death", "positiveIncrease", "deathIncrease", 'totalTestResults', 'totalTestResultsIncrease', 'cfr', 'tpr_new')]
  )
 
 # %%
@@ -79,7 +79,7 @@ nat_ts = state_tests[, lapply(.SD, sum, na.rm = T), by = d,
 smoothvars = c("positive", "positiveIncrease", "death", "deathIncrease", "tpr_n", "cfr", "tpr", "totalTestResultsIncrease")
 
 nat_ts[, paste0("rm3_", smoothvars) := lapply(.SD, rollmean, k = 3, fill = NA, na.pad = T), .SDcols = smoothvars]
-nat_ts[, .(positive, positiveIncrease, death, deathIncrease, totalTestResults, totalTestResultsIncrease)] %>% head
+nat_ts[, .(d, positive, positiveIncrease, death, deathIncrease, totalTestResults, totalTestResultsIncrease)] %>% head
 
 # %%
 p1 = nat_ts[d >= "2020-03-15"] %>% 
@@ -120,7 +120,7 @@ p4 = nat_ts[d >= "2020-03-15"] %>%
 p5 = nat_ts[d >= "2020-03-15"] %>% 
     ggplot(aes(x = d, y = cfr)) + geom_smooth(se = F) +
     geom_point() + ggtitle("CFR Estimate over time")
-(p2)/(p3 | p4) | p5
+(p2)/(p3 | p4) # | p5
 
 # %%
 # generic function to plot time series
@@ -151,7 +151,7 @@ p2 = plot_ts(t10states, 'positiveIncrease', "New Cases Time Series", T, F)
 (p1 | p2)
 
 # %%
-p2 + facet_wrap(~ state) + lal_plot_theme()
+p2 + facet_wrap(~ state) + theme(legend.position = "None")
 
 # %%
 p1 = plot_ts(t10states, 'death', "Cumulative Deaths Time Series", T, F)
@@ -159,10 +159,11 @@ p2 = plot_ts(t10states, 'deathIncrease', "New Deaths Time Series", T, F)
 (p1 | p2)
 
 # %%
-p2 + facet_wrap(~ state) + lal_plot_theme()
+p2 + facet_wrap(~ state) 
 
 # %%
-(cfp = plot_ts(t10states[d >= "2020-03-15"], "cfr", "Case Fatality Rate", F, F))
+cfp = plot_ts(t10states[d >= "2020-03-15"], "cfr", "Case Fatality Rate", F, F)
+p5 + ylim(c(0, 0.1)) | cfp+ ylim(c(0, 0.1)) 
 
 # %% [markdown]
 # ## Tests 
@@ -172,6 +173,9 @@ p = plot_ts(t10states, 'totalTestResults', "Cumulative Tests Time Series", T, F)
 p2 = plot_ts(t10states[d >= '2020-03-15'], 'totalTestResultsIncrease', "New Tests Time Series", T, F)
 
 (p | p2)
+
+# %%
+p2 + facet_wrap(~ state) 
 
 # %% [markdown]
 # # Shares over time  
@@ -256,7 +260,6 @@ dt$day2 = as.factor(dt$day)
     geom_smooth(se = F) +
     labs(title = "Day of the week effects in Test Results") +
     facet_wrap(~ state, 2) +
-    lal_plot_theme() +
     scale_y_log10()
 )
 
@@ -280,7 +283,8 @@ day_of_week_plot = function(df){
 }
 
 # %%
-test_increase_regs = dt %>% group_by(state) %>% group_map( ~ lm(log(totalTestResultsIncrease+1) ~ relevel(day2, 2), .x) %>% tidy %>% mutate(state = .y[[1]]), keep = T) 
+test_increase_regs = dt %>% group_by(state) %>% group_map( ~ lm(log(totalTestResultsIncrease+1) ~ relevel(day2, 2), .x) %>% 
+                tidy %>% mutate(state = .y[[1]]), keep = T) 
 dow_plots = map(test_increase_regs , day_of_week_plot) %>% wrap_plots(nrow = 2)
 dow_plots +  plot_annotation(
     title = 'Day of the week effects in Test Volume',
