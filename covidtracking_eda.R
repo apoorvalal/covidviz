@@ -26,11 +26,11 @@ options(repr.plot.width = 15, repr.plot.height = 12)
 # https://covidtracking.com/api
 
 # %%
-system("rm -f daily.csv")
-system("wget https://covidtracking.com/api/v1/states/daily.csv")
+system("rm -f data/daily.csv")
+system("curl https://covidtracking.com/api/v1/states/daily.csv > data/daily.csv")
 
 # %%
-state_tests = fread('daily.csv')
+state_tests = fread('data/daily.csv')
 state_tests[, d := anydate(date)]
 state_tests[, day := weekdays(d)]
 dropcols = c('hash', 'dateChecked')
@@ -44,7 +44,9 @@ state_tests[, tpr_new := positiveIncrease / totalTestResultsIncrease]
 (most_affected = 
      state_tests[d == max(state_tests$d)][
     order(-positive)][
-    1:10, c("state", "d", "positive", "death", "positiveIncrease", "deathIncrease", 'totalTestResults', 'totalTestResultsIncrease', 'cfr', 'tpr_new')]
+    1:10, 
+    c("state", "d", "positive", "death", "positiveIncrease", "deathIncrease", 
+      'totalTestResults', 'totalTestResultsIncrease', 'cfr',  'tpr', 'tpr_new')]
  )
 
 # %%
@@ -232,18 +234,11 @@ options(repr.plot.width = 15, repr.plot.height = 10)
 # %%
 p1 = plot_ts(t10states, 'tpr', "Test Positive Rate: Time Series", T, F) +
     scale_y_continuous(breaks = seq(0, 1, .1))
-# p2 = plot_ts(t10states, rm3_tpr, "Test Positive Rate (Rolling Mean): Time Series", T) +
-#     scale_y_continuous(breaks = seq(0, 1, .1))
-p1 
 
-# %% [markdown]
-# ## New TPR
-
-# %%
-p1 = plot_ts(t10states, 'tpr_new', "Test Positive Rate: Time Series", T, F) +
+p2 = plot_ts(t10states, 'tpr_new', "Test Positive Rate: Time Series", T, F) +
     scale_y_continuous(breaks = seq(0, 1, .1))
 
-p1 
+p1 | p2 
 
 # %% [markdown]
 # # Day-of-week effects 
