@@ -183,17 +183,17 @@ p2 + facet_wrap(~ state)
 # # Shares over time  
 
 # %%
-t10states[, rm3_deathIncrease := ifelse(rm3_deathIncrease < 0, 0, deathIncrease)]
-t10states[, rm3_totalTestResultsIncrease := ifelse(rm3_totalTestResultsIncrease < 0, 0, rm3_totalTestResultsIncrease)]
+t10states[rm3_deathIncrease < 0, rm3_deathIncrease := 0]
+t10states[rm3_positiveIncrease< 0, rm3_positiveIncrease := 0]
+t10states[rm3_totalTestResultsIncrease< 0, rm3_totalTestResultsIncrease := 0]
 
 t10states[, denom_cases := sum(rm3_positiveIncrease), by = d][, 
-            denom_deaths := sum(rm3_deathIncrease), by = d]
-t10states[, newcase_share := rm3_positiveIncrease / denom_cases][, 
-            newdeath_share := rm3_deathIncrease/denom_deaths]
+            denom_deaths := sum(rm3_deathIncrease), by = d][,
+            denom_tests  := sum(rm3_totalTestResultsIncrease), by = d]
 
-t10states[, rm3_totalTestResultsIncrease := ifelse(rm3_totalTestResultsIncrease < 0, 0, rm3_totalTestResultsIncrease)]
-t10states[, denom_tests := sum(rm3_totalTestResultsIncrease), by = d]
-t10states[, tests_share := rm3_totalTestResultsIncrease / denom_tests]
+t10states[, newcase_share := rm3_positiveIncrease / denom_cases][, 
+            newdeath_share := rm3_deathIncrease/denom_deaths][,
+            newtests_share := rm3_totalTestResultsIncrease / denom_tests]
 
 # %%
 t10states[, stgroup := case_when(
@@ -215,7 +215,7 @@ p2 = ggplot(t10states[d >= "2020-03-24"], aes(x = d, y = newdeath_share, fill = 
     scale_fill_brewer(palette = "Spectral") +
     scale_colour_brewer(palette = "Spectral") +
     ggtitle("New Deaths")
-p3 = ggplot(t10states[d >= "2020-03-15"], aes(x = d, y = tests_share, fill = stgroup, colour = stgroup)) +
+p3 = ggplot(t10states[d >= "2020-03-15"], aes(x = d, y = newtests_share, fill = stgroup, colour = stgroup)) +
     geom_area(position="fill") +
     theme(legend.position = "None") + 
     scale_y_continuous(breaks = seq(0, 1, .1))+
@@ -223,7 +223,11 @@ p3 = ggplot(t10states[d >= "2020-03-15"], aes(x = d, y = tests_share, fill = stg
     scale_colour_brewer(palette = "Spectral") +
     ggtitle("New Tests")
 options(repr.plot.width = 20, repr.plot.height = 12)
-(p3 | p1 | p2 ) + plot_annotation(title = "Shares of Tests, Cases, and Deaths over time")
+p = (p3 | p1 | p2 ) + plot_annotation(title = "Shares of Tests, Cases, and Deaths over time")
+p
+
+# %%
+ggsave("state_carpet.png", p, width = 20, height = 10)
 
 # %% [markdown] toc-hr-collapsed=true toc-nb-collapsed=true
 # ## TPR
@@ -279,7 +283,7 @@ day_of_week_plot = function(df){
 
 # %%
 test_increase_regs = dt %>% group_by(state) %>% group_map( ~ lm(log(totalTestResultsIncrease+1) ~ relevel(day2, 2), .x) %>% 
-                tidy %>% mutate(state = .y[[1]]), keep = T) 
+                tidy %>% mutate(state = .y[[1]]), .keep = T) 
 dow_plots = map(test_increase_regs , day_of_week_plot) %>% wrap_plots(nrow = 2)
 dow_plots +  plot_annotation(
     title = 'Day of the week effects in Test Volume',
@@ -302,5 +306,3 @@ dow_plots +  plot_annotation(
     title = 'Day of the week effects in COVID19 Deaths',
     subtitle = 'Reference category: Monday',
 )
-
-# %%
