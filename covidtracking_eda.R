@@ -16,7 +16,7 @@
 # %%
 rm(list = ls())
 library(LalRUtils)
-libreq(data.table, tidyverse, anytime, patchwork, plotly, broom, zoo, hrbrthemes)
+libreq(data.table, tidyverse, anytime, patchwork, plotly, broom, zoo)
 theme_set(lal_plot_theme_d())
 
 options(repr.plot.width = 15, repr.plot.height = 12)
@@ -64,6 +64,9 @@ t10states[, paste0("rm3_", smoothvars) := lapply(.SD, rollmean, k = 3, fill = NA
 
 # t10states[, tpr_rm3 := rollmeanr(tpr, 3, fill = NA), by = .(state)]
 
+# %%
+t10states %>% glimpse
+
 # %% [markdown] toc-hr-collapsed=true toc-nb-collapsed=true
 # # Plots 
 
@@ -71,14 +74,16 @@ t10states[, paste0("rm3_", smoothvars) := lapply(.SD, rollmean, k = 3, fill = NA
 # ## Natl Time Series
 
 # %%
+vars = c("positive", "positiveIncrease", "death", "deathIncrease", "totalTestResultsIncrease", "totalTestResults", 
+              "hospitalizedCurrently", "hospitalizedCumulative")
 nat_ts = state_tests[, lapply(.SD, sum, na.rm = T), by = d, 
-                     .SDcols = c("positive", "positiveIncrease", "totalTestResults", "totalTestResultsIncrease", "death", "deathIncrease")][, 
+        .SDcols = vars][, 
     `:=`(cfr = death/positive,
          tpr = positive/totalTestResults,
          tpr_n = positiveIncrease/totalTestResultsIncrease
          )]
 
-smoothvars = c("positive", "positiveIncrease", "death", "deathIncrease", "tpr_n", "cfr", "tpr", "totalTestResultsIncrease")
+smoothvars = c(vars, "tpr_n", "cfr", "tpr" )
 
 nat_ts[, paste0("rm3_", smoothvars) := lapply(.SD, rollmean, k = 3, fill = NA, na.pad = T), .SDcols = smoothvars]
 nat_ts[, .(d, positive, positiveIncrease, death, deathIncrease, totalTestResults, totalTestResultsIncrease)] %>% head
@@ -101,6 +106,9 @@ p4 = nat_ts[d >= "2020-03-15"] %>%
     geom_point() + ggtitle("New Deaths")
 
 (p1 | p2)/(p3 | p4)
+
+# %%
+ggplotly(p2)
 
 # %%
 p1 = nat_ts[d >= "2020-03-15"] %>% 
@@ -153,7 +161,7 @@ p2 = plot_ts(t10states, 'positiveIncrease', "New Cases Time Series", T, F)
 (p1 | p2)
 
 # %%
-p2 + facet_wrap(~ state) + theme(legend.position = "None")
+ggplotly(p2)
 
 # %%
 p1 = plot_ts(t10states, 'death', "Cumulative Deaths Time Series", T, F)
@@ -161,7 +169,13 @@ p2 = plot_ts(t10states, 'deathIncrease', "New Deaths Time Series", T, F)
 (p1 | p2)
 
 # %%
-p2 + facet_wrap(~ state) 
+p1 = plot_ts(t10states, 'hospitalizedCurrently', "Current Hospitalisations", T, F)
+p2 = plot_ts(t10states, 'hospitalizedIncrease', "New Hospitalisations", T)
+
+(p1 | p2)
+
+# %%
+ggplotly(p1)
 
 # %%
 cfp = plot_ts(t10states[d >= "2020-03-15"], "cfr", "Case Fatality Rate", F, F)
@@ -175,9 +189,6 @@ p = plot_ts(t10states, 'totalTestResults', "Cumulative Tests Time Series", T, F)
 p2 = plot_ts(t10states[d >= '2020-03-15'], 'totalTestResultsIncrease', "New Tests Time Series", T, F)
 
 (p | p2)
-
-# %%
-p2 + facet_wrap(~ state) 
 
 # %% [markdown]
 # # Shares over time  
@@ -233,13 +244,13 @@ ggsave("state_carpet.png", p, width = 20, height = 10)
 # ## TPR
 
 # %%
-options(repr.plot.width = 15, repr.plot.height = 10)
+options(repr.plot.width = 20, repr.plot.height = 14)
 
 # %%
 p1 = plot_ts(t10states, 'tpr', "Test Positive Rate: Time Series", T, F) +
     scale_y_continuous(breaks = seq(0, 1, .1))
 
-p2 = plot_ts(t10states, 'tpr_new', "Test Positive Rate: Time Series", T, F) +
+p2 = plot_ts(t10states, 'tpr_new', "New Test Positive Rate: Time Series", T, F) +
     scale_y_continuous(breaks = seq(0, 1, .1))
 
 p1 | p2 
