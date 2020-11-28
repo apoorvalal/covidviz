@@ -30,7 +30,7 @@ system("rm -f data/daily.csv")
 system("curl https://covidtracking.com/api/v1/states/daily.csv > data/daily.csv")
 
 # %%
-state_tests = fread('data/daily.csv')
+state_tests = fread('https://api.covidtracking.com/v1/states/daily.csv')
 state_tests[, d := anydate(date)]
 state_tests[, day := weekdays(d)]
 dropcols = c('hash', 'dateChecked')
@@ -178,7 +178,7 @@ p2 = plot_ts(t10states, 'hospitalizedIncrease', "New Hospitalisations", T)
 ggplotly(p1)
 
 # %%
-cfp = plot_ts(t10states[d >= "2020-03-15"], "cfr", "Case Fatality Rate", F, F)
+cfp = plot_ts(t10states[d >= "2020-03-15"], "cfr", "Fatality Rate", F, F)
 p5 + ylim(c(0, 0.1)) | cfp+ ylim(c(0, 0.1)) 
 
 # %% [markdown]
@@ -209,7 +209,9 @@ t10states[, newcase_share := rm3_positiveIncrease / denom_cases][,
 # %%
 t10states[, stgroup := case_when(
     state %in% c("NY", "NJ", "MA", "CT", "PA") ~ paste0("1_", state), # group northeast
-    TRUE ~ paste0("2_", state)
+    state %in% c("CA") ~ paste0("2_", state), # group northeast
+    state %in% c("TX", "GA", "FL") ~ paste0("3_", state), # group northeast
+    TRUE ~ paste0("4_", state)
 )]
 
 # %%
@@ -248,12 +250,15 @@ options(repr.plot.width = 20, repr.plot.height = 14)
 
 # %%
 p1 = plot_ts(t10states, 'tpr', "Test Positive Rate: Time Series", T, F) +
-    scale_y_continuous(breaks = seq(0, 1, .1))
+    scale_y_continuous(breaks = seq(0, 1, .1)) + ylim(c(0, 1))
 
 p2 = plot_ts(t10states, 'tpr_new', "New Test Positive Rate: Time Series", T, F) +
-    scale_y_continuous(breaks = seq(0, 1, .1))
+    scale_y_continuous(breaks = seq(0, 1, .1))+ ylim(c(0, 1))
 
 p1 | p2 
+
+# %%
+ggplotly(p2)
 
 # %% [markdown]
 # # Day-of-week effects 
@@ -269,6 +274,16 @@ dt$day2 = as.factor(dt$day)
     geom_point(aes(colour = as.factor(wknd))) + 
     geom_smooth(se = F) +
     labs(title = "Day of the week effects in Test Results") +
+    facet_wrap(~ state, 2) +
+    scale_y_log10()
+)
+
+
+# %%
+(p = ggplot(dt, aes(d, y = deathIncrease)) +
+    geom_point(aes(colour = as.factor(wknd))) + 
+    geom_smooth(se = F) +
+    labs(title = "Day of the week effects in Deaths") +
     facet_wrap(~ state, 2) +
     scale_y_log10()
 )
@@ -303,17 +318,13 @@ dow_plots +  plot_annotation(
 
 
 # %%
-positive_rate = dt %>% group_by(state) %>% group_map( ~ lm(tpr_new ~ relevel(day2, 2), .x) %>% tidy %>% mutate(state = .y[[1]]), keep = T) 
-dow_plots = map(positive_rate, day_of_week_plot) %>% wrap_plots(nrow = 2)
+test_increase_regs = dt %>% group_by(state) %>% 
+    mutate(dead = ifelse(deathIncrease < 0 , 0, deathIncrease)) %>% 
+    group_map( ~ lm(log1p(dead) ~ relevel(day2, 2), .x) %>% 
+                tidy %>% mutate(state = .y[[1]]), .keep = T) 
+dow_plots = map(test_increase_regs , day_of_week_plot) %>% wrap_plots(nrow = 2)
 dow_plots +  plot_annotation(
-    title = 'Day of the week effects in Test Positive Rate',
+    title = 'Day of the week effects in Deaths',
     subtitle = 'Reference category: Monday',
 )
 
-# %%
-dths = dt %>% group_by(state) %>% group_map( ~ lm(log(deathIncrease+1) ~ relevel(day2, 2), .x) %>% tidy %>% mutate(state = .y[[1]]), keep = T) 
-dow_plots = map(dths, day_of_week_plot) %>% wrap_plots(nrow = 2)
-dow_plots +  plot_annotation(
-    title = 'Day of the week effects in COVID19 Deaths',
-    subtitle = 'Reference category: Monday',
-)

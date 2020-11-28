@@ -50,6 +50,10 @@ mob <- tbl(bq_con, "mobility_report")
 mob %>% glimpse
 
 # %%
+mob %>% filter(country_region_code == "US") %>% 
+    collect() -> us_mobility
+
+# %%
 tic()
 mob %>% collect() ->
     mobility_df
@@ -155,6 +159,9 @@ mobility_faceted(la_area2)  + ggtitle("Mobility Trends in the LA Area")
 # %% [markdown]
 # ## International
 
+# %% [markdown]
+# ### Helper Functions
+
 # %%
 melter = function(df, keys = c("country_region", "d", "weekend")){
     df_long = melt(df, id.vars = keys,
@@ -226,6 +233,17 @@ nep_l = melter(nep)
 ggsave("nep_mobility.jpg", nep, width = 20, height = 15)
 
 # %%
+bih = mobility_df[country_region =="India" & sub_region_1 == "Bihar" & sub_region_2 == ""]
+bih %>% head
+bih_l = melter(bih)
+(bih = country_faceted(bih_l) +
+    labs(title = "Mobility Report for Bihar", subtitle = "Based on Google Maps Activity", caption = "Queried on BigQuery"))
+
+# %%
+options(repr.plot.width = 20, repr.plot.height=12)
+(nep | bih)
+
+# %%
 ind = mobility_df[country_region =="India"]
 ind_l = melter(ind, c("sub_region_1", "d", "weekend"))
 ind_l = ind_l[sub_region_1 != ""]
@@ -238,20 +256,19 @@ ggsave("ind_mobility.jpg", ind_disagg, width = 30, height = 30)
 # Jammu and Kashmir up by 300%+ because the baseline period corresponds with a sever lockdown [for political reasons - abrogation of article 370 etc]. Baselines matter in DiD.
 
 # %%
-countries_w_subn = mobility_df[, .(sub = unique(sub_region_1)), by = country_region][sub != ""]
-countries_w_subn[, unique(country_region)] %>% print
-# %%
-d = mobility_df[country_region =="Kenya"]
-d_l= melter(d, c("sub_region_1", "d", "weekend")) %>% .[sub_region_1 != ""]
-d_l %>% head
-
-(ind_disagg = subregion_faceted(d_l))
-
-# %%
 d = mobility_df[country_region =="South Africa"]
 d_l= melter(d, c("sub_region_1", "d", "weekend")) %>% .[sub_region_1 != ""]
 (ind_disagg = subregion_faceted(d_l))
 
+# %% [markdown]
+# ### Subregion Data Availability
+
+# %%
+countries_w_subn = mobility_df[, .(sub = unique(sub_region_1)), by = country_region][sub != ""]
+countries_w_subn[, unique(country_region)] %>% print
+# %%
+countries_w_subn = mobility_df[, .(sub = unique(sub_region_2)), by = country_region][sub != ""]
+countries_w_subn[, unique(country_region)] %>% print
 # %% [markdown]
 # # Oxford Govt Policy Tracker
 
