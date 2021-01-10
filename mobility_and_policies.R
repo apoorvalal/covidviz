@@ -18,6 +18,8 @@ rm(list = ls())
 
 library(LalRUtils)
 libreq(data.table, magrittr, tidyverse, janitor, huxtable, knitr, patchwork, timeDate, plotly)
+
+# %%
 # theme_set(lal_plot_theme(textangle = 90))
 theme_set(lal_plot_theme(textangle = 90))
 set.seed(42)
@@ -148,11 +150,11 @@ mobility_plotter = function(df, col, cmap = T, leg = F){
 }
 
 # %%
-options(repr.plot.width = 12, repr.plot.height=15)
+options(repr.plot.width = 15, repr.plot.height=20)
 mobility_plotter(bay_area, grocery, leg = T) / mobility_plotter(la_area, grocery, leg = T)
 
 # %%
-options(repr.plot.width = 20, repr.plot.height=16)
+options(repr.plot.width = 25, repr.plot.height=16)
 mobility_faceted(bay_area2) + ggtitle("Mobility Trends in the Bay Area")
 mobility_faceted(la_area2)  + ggtitle("Mobility Trends in the LA Area")
 
@@ -240,15 +242,17 @@ bih_l = melter(bih)
     labs(title = "Mobility Report for Bihar", subtitle = "Based on Google Maps Activity", caption = "Queried on BigQuery"))
 
 # %%
-options(repr.plot.width = 20, repr.plot.height=12)
+options(repr.plot.width = 25, repr.plot.height=12)
 (nep | bih)
 
 # %%
 ind = mobility_df[country_region =="India"]
 ind_l = melter(ind, c("sub_region_1", "d", "weekend"))
-ind_l = ind_l[sub_region_1 != ""]
+ind_l = ind_l[sub_region_1 != ""][order(d)]
 ind %>% head
 
+# %%
+options(repr.plot.width = 25, repr.plot.height=12)
 (ind_disagg = subregion_faceted(ind_l, freescale = T))
 ggsave("ind_mobility.jpg", ind_disagg, width = 30, height = 30)
 
@@ -269,6 +273,9 @@ countries_w_subn[, unique(country_region)] %>% print
 # %%
 countries_w_subn = mobility_df[, .(sub = unique(sub_region_2)), by = country_region][sub != ""]
 countries_w_subn[, unique(country_region)] %>% print
+# %%
+countries_w_metros = mobility_df[, .(sub = unique(metro_area)), by = country_region][sub != ""]
+countries_w_metros[, unique(country_region)] %>% print
 # %% [markdown]
 # # Oxford Govt Policy Tracker
 
@@ -315,17 +322,24 @@ policies[, date := lubridate::ymd(date)]
 policies %>% glimpse
 
 # %%
-policies[, .N, by = .(country_name, alpha_3_code)][order(country_name)]
+country_obs = policies[, .N, by = .(country_name, alpha_3_code)][order(country_name)]
+country_obs
+
+# %%
+country_obs[N > 376]
 
 # %%
 sa = policies[alpha_3_code %in% c("IND", "NPL", "PAK", "BGD", "LKA", "AFG")]
 
-tsplot = function(df){
-    p = ggplot(df, aes(x = date, y = stringency_index, group = alpha_3_code, colour = alpha_3_code)) +
-    geom_point() + geom_line() + scale_colour_brewer(palette = "Set2")
+tsplot = function(df, grouper = alpha_3_code){
+    p = ggplot(df, aes(x = date, y = stringency_index, group = {{grouper}}, colour = {{grouper}})) +
+    geom_line() 
     return(p)
 }
 
 
 # %%
 tsplot(sa) + ggtitle("Lockdown / NPI Stringency in South Asia")
+
+# %%
+policies[alpha_3_code == "USA"][region_code %in% c("US_CA", "US_NY", "US_FL", "US_TX", "US_IL", "US_GA", "US_WA", "US_AZ")] %>% tsplot(., region_code)

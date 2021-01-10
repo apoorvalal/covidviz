@@ -26,10 +26,6 @@ options(repr.plot.width = 15, repr.plot.height = 12)
 # https://covidtracking.com/api
 
 # %%
-system("rm -f data/daily.csv")
-system("curl https://covidtracking.com/api/v1/states/daily.csv > data/daily.csv")
-
-# %%
 state_tests = fread('https://api.covidtracking.com/v1/states/daily.csv')
 state_tests[, d := anydate(date)]
 state_tests[, day := weekdays(d)]
@@ -109,6 +105,9 @@ p4 = nat_ts[d >= "2020-03-15"] %>%
 
 # %%
 ggplotly(p2)
+
+# %%
+ggplotly(p4)
 
 # %%
 p1 = nat_ts[d >= "2020-03-15"] %>% 
