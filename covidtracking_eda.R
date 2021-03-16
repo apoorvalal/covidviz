@@ -6,7 +6,7 @@
 #       extension: .R
 #       format_name: hydrogen
 #       format_version: '1.3'
-#       jupytext_version: 1.3.3
+#       jupytext_version: 1.9.1
 #   kernelspec:
 #     display_name: R
 #     language: R
@@ -17,7 +17,7 @@
 rm(list = ls())
 library(LalRUtils)
 libreq(data.table, tidyverse, anytime, patchwork, plotly, broom, zoo)
-theme_set(lal_plot_theme_d())
+theme_set(lal_plot_theme())
 
 options(repr.plot.width = 15, repr.plot.height = 12)
 
