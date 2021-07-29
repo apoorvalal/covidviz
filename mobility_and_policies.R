@@ -6,7 +6,7 @@
 #       extension: .R
 #       format_name: hydrogen
 #       format_version: '1.3'
-#       jupytext_version: 1.3.3
+#       jupytext_version: 1.9.1
 #   kernelspec:
 #     display_name: R
 #     language: R
@@ -66,14 +66,14 @@ mobility_df %<>% setDT
 mobility_df %>% glimpse()
 
 # %%
-fwrite(mobility_df, "data/google-mobility-reports.csv")
+fwrite(mobility_df, "data/google-mobility-reports.csv.gz")
 dbDisconnect(bq_con)
 
 # %% [markdown]
 # ## Viz
 
 # %%
-mobility_df = fread("data/google-mobility-reports.csv")
+mobility_df = fread("data/google-mobility-reports.csv.gz")
 old = c('retail_and_recreation_percent_change_from_baseline',
   'grocery_and_pharmacy_percent_change_from_baseline',
   'parks_percent_change_from_baseline',
@@ -118,7 +118,7 @@ bay_area2 %>% head
 # Function to plot mobility with sensible faceting + gray bars for weekends.
 
 # %%
-mobility_faceted = function(df, cmap = T, leg = T, wknd = T){
+mobility_faceted = function(df, cmap = T, leg = T, wknd = F){
     p =  ggplot(df, aes(x = d, y = value, group = category, colour = category))
     if (wknd == T){
         p = p + geom_vline(data = df[weekend == T],
@@ -139,9 +139,9 @@ mobility_plotter = function(df, col, cmap = T, leg = F){
     p = df %>%
         ggplot(aes(x = d, y = {{ col }}, group = sub_region_2, colour = sub_region_2)) +
             geom_hline(yintercept = 0, colour = 'gray', linetype = 'dashed') +
-            geom_vline(data = df[weekend == T],
-                     mapping = aes(xintercept = d),
-                     color = 'gray', size = 2.9, alpha = 0.1) +
+#             geom_vline(data = df[weekend == T],
+#                      mapping = aes(xintercept = d),
+#                      color = 'gray', size = 2.9, alpha = 0.1) +
             geom_point() + geom_smooth(se = F) +
             scale_x_date(date_breaks = "1 week", date_labels = "%b %d")
     if (cmap == T) p = p + scale_colour_brewer(palette = "Set2")
@@ -172,7 +172,7 @@ melter = function(df, keys = c("country_region", "d", "weekend")){
     return(df_long)
 }
 
-subregion_faceted = function(df, cmap = T, freescale = F, leg = T, wknd = T){
+subregion_faceted = function(df, cmap = T, freescale = F, leg = T, wknd = F){
     p = ggplot(df, aes(x = d, y = value, group = category, colour = category))
     if (wknd == T){
         p = p + geom_vline(data = df[weekend == T], mapping = aes(xintercept = d),
@@ -192,7 +192,7 @@ subregion_faceted = function(df, cmap = T, freescale = F, leg = T, wknd = T){
     return(p)
 }
 
-country_faceted = function(df, freescale = F,  cmap = F, leg = F, wknd = T){
+country_faceted = function(df, freescale = F,  cmap = F, leg = F, wknd = F){
     p = ggplot(df, aes(x = d, y = value))
     if (wknd == T){
         p = p + geom_vline(data = df[weekend == T], mapping = aes(xintercept = d),
@@ -216,9 +216,9 @@ mob_plotter = function(df, col, grp, leg = T){
     p = df %>%
         ggplot(aes(x = d, y = {{ col }}, group = {{grp}}, colour = {{grp}})) +
             geom_hline(yintercept = 0, colour = 'gray', linetype = 'dashed') +
-            geom_vline(data = df[weekend == T],
-                     mapping = aes(xintercept = d),
-                     color = 'gray', size = 2.9, alpha = 0.3) +
+#             geom_vline(data = df[weekend == T],
+#                      mapping = aes(xintercept = d),
+#                      color = 'gray', size = 2.9, alpha = 0.3) +
         geom_point() + geom_smooth(se = F) +
         scale_x_date(date_breaks = "1 week", date_labels = "%m-%d")
     if (leg == F) p = p + guides(colour = F)
@@ -240,6 +240,12 @@ bih %>% head
 bih_l = melter(bih)
 (bih = country_faceted(bih_l) +
     labs(title = "Mobility Report for Bihar", subtitle = "Based on Google Maps Activity", caption = "Queried on BigQuery"))
+
+# %%
+wb= mobility_df[country_region =="India" & sub_region_1 == "West Bengal" & sub_region_2 == ""]
+wb_l = melter(wb)
+(wb = country_faceted(wb_l) +
+    labs(title = "Mobility Report for WB", subtitle = "Based on Google Maps Activity", caption = "Queried on BigQuery"))
 
 # %%
 options(repr.plot.width = 25, repr.plot.height=12)
@@ -310,14 +316,14 @@ toc()
 # %%
 policies %<>% setDT
 
-fwrite(policies, "data/ox_policy_tracker.csv")
+fwrite(policies, "data/ox_policy_tracker.csv.gz")
 dbDisconnect(bq_con)
 
 # %% [markdown]
 # ### Viz
 
 # %%
-policies = fread("data/ox_policy_tracker.csv")
+policies = fread("data/ox_policy_tracker.csv.gz")
 policies[, date := lubridate::ymd(date)]
 policies %>% glimpse
 
@@ -326,7 +332,7 @@ country_obs = policies[, .N, by = .(country_name, alpha_3_code)][order(country_n
 country_obs
 
 # %%
-country_obs[N > 376]
+country_obs[N > median(N)]
 
 # %%
 sa = policies[alpha_3_code %in% c("IND", "NPL", "PAK", "BGD", "LKA", "AFG")]
