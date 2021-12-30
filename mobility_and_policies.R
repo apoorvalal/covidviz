@@ -17,7 +17,7 @@
 rm(list = ls())
 
 library(LalRUtils)
-libreq(data.table, magrittr, tidyverse, janitor, huxtable, knitr, patchwork, timeDate, plotly)
+libreq(data.table, magrittr, tidyverse, janitor, knitr, patchwork, timeDate, plotly)
 
 # %%
 # theme_set(lal_plot_theme(textangle = 90))
@@ -52,13 +52,8 @@ mob <- tbl(bq_con, "mobility_report")
 mob %>% glimpse
 
 # %%
-mob %>% filter(country_region_code == "US") %>% 
-    collect() -> us_mobility
-
-# %%
 tic()
-mob %>% collect() ->
-    mobility_df
+mob %>% collect() -> mobility_df
 toc()
 
 # %%
